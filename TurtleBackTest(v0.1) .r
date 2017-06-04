@@ -37,7 +37,9 @@ fee.rate             <- c(products$rb$cost_ratio,        #手续费读取
                                                              
 system.selection     <- 2  #choose sys1 or sys2            #采用哪个交易系统        
                                                              
-position             <- rep(0,length(product_ids))         #表现持仓的数列
+position             <- rep(0,length(product_ids))         #表现持仓unit的数列
+
+holding              <- rep(0,length(product_ids))         #表现持仓合约的数列
 
 corr_mat             <- list(                       #两个判定风险的相关矩阵
                         clscorr = matrix(c(1,1,0,1,1,0,0,0,1),3,3,
