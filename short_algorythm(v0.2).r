@@ -27,12 +27,12 @@ no_contract = NA    #中转合约数量
 
 for (j in 1:length(product_ids)){
 
-  if (unit_long[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
+  if (unit_short[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
   t_position = copy(position) #在单日开多单的情况下必须重复读取实际的position，因为
                               #t_position会在k-loop里面累加，影响到其他产品的测试结果
-  for(k in 1:unit_long[j]) {
+  for(k in 1:unit_short[j]) {
     
-    t_position[j] = t_position[j] + 1
+    t_position[j] = t_position[j] - 1
     
     #test 1: any direction ,single holding should be less than 4
     if (any(abs(t_position) > 4)) {
@@ -49,28 +49,28 @@ for (j in 1:length(product_ids)){
         holding[j] <- position[j] * units[j]   #update holdings
         
         enter_date <- cdt[[1]][ptr]       
-        direction <- 1L                 # 1L long, -1L short
-        enter_price <- cdt[[15 + (j-1) * 15]][ptr] + slippage[j]  #subset the channel price + slippage
+        direction <- -1L                 # 1L long, -1L short
+        enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
         fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
-        cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
+        cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
         
         contract <- list(enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][ptr],
                          direction = direction,
                          enter_price = enter_price,
                          cut_point = cut,
-                         no_contract = units[j]
+                         no_contract = units[j]                #每次做一个unit
         )
         
         standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
         
-        cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]    #update cash
+        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
         
     }
     
     
 }#end of k looping for open tests
   
-}#开多仓loop
+}#开仓loop
 
 sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
