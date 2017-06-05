@@ -36,6 +36,8 @@ fee.rate             <- c(products$rb$cost_ratio,        #手续费读取
                           products$al$cost_ratio)          
 
 fee                  <- 0
+
+closed_profit        <- 0                                #累积完成利润
                                                              
 system.selection     <- 2  #choose sys1 or sys2            #采用哪个交易系统        
                                                              
@@ -55,8 +57,7 @@ corr_mat             <- list(                       #两个判定风险的相关
 close_sys             <- NULL  #后面可以用这个控制使用什么平仓规则
 
 data                  <- list()          #存储价格数据
-trade_in              <- list()          #记录买入
-trade_out             <- list()          #记录卖出
+trades                <- list()          #交易记录
 standing_contract     <- list()          #持仓记录
 asset_sheet           <- list()          #资产记录
 
@@ -170,57 +171,57 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
 
 
 #####################Asset Monitor#############################################
-
-#判定是否要调整操盘资金量的大小  
-if (account < 0.9*shadow_account) {
   
-  shadow_account = shadow_account*0.8
-
-   } else if (account >(1/0.9)*shadow_account & shadow_account < acc_origin) {
+  #判定是否要调整操盘资金量的大小  
+  if (account < 0.9*shadow_account) {
+    
+    shadow_account = shadow_account*0.8
+    
+  } else if (account >(1/0.9)*shadow_account & shadow_account < acc_origin) {
+    
+    shadow_account = 1.25*shadow_account
+    
+  }
   
-  shadow_account = 1.25*shadow_account
-  
-   }
- 
   
   
-#计算Unit，并且判定调整  
+  #计算Unit，并且判定调整  
   
-NxDPPs <- rep(NA,length(product_ids))
- 
-for (j in 1:length(product_ids)){
-   
-   NxDPPs[j] <- as.numeric(cdt[[15*j-5]][ptr])  #根据相对位置提取N*DPP以计算Unit限制 
-   
-}
-
-units <- 0.01*shadow_account/NxDPPs             #当前每个产品下的Unit
-units <- floor(units)                           #向下取整
-
-
-
-#建立4个测试向量
-
-test1 <- rep(NA,length(product_ids))
-test2 <- rep(NA,length(product_ids))
-test3 <- rep(NA,length(product_ids))
-test4 <- rep(NA,length(product_ids))
-
-
-#根据Unit判定position，如果position 全为0则直接跳过，否则进行下列运算。
-
-if(all(position == 0)) {
+  NxDPPs <- rep(NA,length(product_ids))
   
-  test1
-  test2
-  test3
-  test4
+  for (j in 1:length(product_ids)){
+    
+    NxDPPs[j] <- as.numeric(cdt[[15*j-5]][ptr])  #根据相对位置提取N*DPP以计算Unit限制 
+    
+  }
   
-} else {}
-
-#subset需要调整的product
-
-#forloop j in selected products, 每个做一次平仓
+  units <- 0.01*shadow_account/NxDPPs             #当前每个产品下的Unit
+  units <- floor(units)                           #向下取整
+  
+  
+  
+  #建立4个测试向量
+  
+  test1 <- rep(NA,length(product_ids))
+  test2 <- rep(NA,length(product_ids))
+  test3 <- rep(NA,length(product_ids))
+  test4 <- rep(NA,length(product_ids))
+  
+  
+  #根据Unit判定position，如果position 全为0则直接跳过，否则进行下列运算。
+  
+  if(all(position == 0)) {
+    
+    test1
+    test2
+    test3
+    test4
+    
+  } else {}
+  
+  #subset需要调整的product
+  
+  #forloop j in selected products, 每个做一次平仓
 
   
 #####################End of Asset Monitor######################################
@@ -246,7 +247,7 @@ for (j in 1:length(product_ids)){     #extract the high,55high, low,55low
   highs_55 <- append(highs_55,cdt[[15+(j-1)*15]][ptr]) #vector that have the upper channel
   lows <- append(lows,cdt[[5+(j-1)*15]][ptr])
   lows_55 <- append(lows_55,cdt[[16+(j-1)*15]][ptr])
-  ATRs  <- append(ATRs,cdt[[9+(j-1)*15]][ptr]) #help to determin strength of signal
+  ATRs  <- append(ATRs,cdt[[9+(j-1)*15]][ptr]) #help to determine strength of signal
 }  
 
 #Then we will need a vector to see if channels been broke
@@ -260,13 +261,13 @@ sig_short <- lows < lows_55
 
 unit_long <- floor((sig_long * highs - sig_long * highs_55)/(0.5*ATRs))  #make sure you don't include any negative number
 
-unit_long <- unit_long + 1 #0.5N的情况下应该一共进2个unit，所以整体要+1
+unit_long <- unit_long + sig_long #0.5N的情况下应该一共进2个unit，所以整体要+1
 
 unit_long[unit_long > 4] = 4 #大于2个N不加仓
 
 unit_short <- floor((sig_short * lows_55 - sig_short * lows)/(0.5*ATRs))
 
-unit_short <- unit_short + 1
+unit_short <- unit_short + sig_short
 
 unit_short[unit_short > 4] = 4 #大于2个N不继续加空仓
 
@@ -309,9 +310,9 @@ for (j in 1:length(product_ids)){
       
       enter_date <- cdt[[1]][ptr]       
       direction <- 1L                 # 1L long, -1L short
-      enter_price <- cdt[[15 + (j-1) * 15]][ptr] + slippage[j]  #subset the channel price + slippage
+      enter_price <- cdt[[15 + (j-1) * 15]][ptr] + (k - 1) * ATRs[j] * 0.5  +slippage[j]  #subset the channel price + slippage
       fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
-      cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
+      cut <- cdt[[15 + (j-1) * 15]][ptr] + unit_long[j] * ATRs[j] * 0.5  + slippage[j] - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
       
       contract <- list(enter_date = enter_date,                    #saving contract information
                        product_name   = cdt[[2 + (j-1) * 15]][ptr],
@@ -332,7 +333,6 @@ for (j in 1:length(product_ids)){
   
 }#开多仓loop
 
-#开空仓，跟上面一样，只是一些操作要反过来做
 
 enter_date = NA     #中转日期
 product_name = NA     #产品类型
@@ -373,10 +373,11 @@ for (j in 1:length(product_ids)){
       
       enter_date <- cdt[[1]][ptr]       
       direction <- -1L                 # 1L long, -1L short
-      enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
+      enter_price <- cdt[[16 + (j-1) * 15]][ptr] - (k - 1) * ATRs[j] * 0.5  - slippage[j]  
+      #subset the channel price - slippage ,don't forget it should add up 0.5N * unit longed.
       fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
-      cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
-      
+      cut <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j] - unit_short[j] * ATRs[j] * 0.5 + 2 * cdt[[9+(j-1)*15]][ptr]           #lost cutting point, 2N
+      #this complicated line just try to refresh the cut point to 2N away from the latest short price
       contract <- list(enter_date = enter_date,                    #saving contract information
                        product_name   = cdt[[2 + (j-1) * 15]][ptr],
                        direction = direction,
@@ -394,15 +395,20 @@ for (j in 1:length(product_ids)){
     
   }#end of k looping for open tests
   
-}#开空仓loop
+}#开仓loop
 
 sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
 
+sta_contract_dt[,id := c(1:nrow(sta_contract_dt))]  #为每笔交易编号，后面好删
 
 
 ####################End of Open Position#######################################
 
 #####################Close Position############################################
+
+
+
+
 #####################End of Close Position#####################################
 
 #####################Profit Taking#############################################
