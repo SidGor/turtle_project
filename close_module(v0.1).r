@@ -15,15 +15,15 @@ match("c",letters) #can use match to locate which price to extract
 
 
 
-l_contracts <- test_dt[direction == 1]
-s_contracts <- test_dt[direction == -1]
+l_contracts <- test_dt[direction == 1]  #存储多单
+s_contracts <- test_dt[direction == -1] #存储空单
 
 #提取高低收矩阵
 
 
-c_highs <- vector()
-c_lows <- vector()
-c_opens <- vector()
+c_highs <- vector()           #存储最高价
+c_lows <- vector()            #存储最低价
+c_opens <- vector()           #存储开盘价
 
 for (j in 1:length(product_ids)) {
   
@@ -49,6 +49,10 @@ l_close <- l_contracts[cut_point > lows,]
 s_close <- s_contracts[cut_point < highs,]
 
 #记录每笔交易信息
+if(nrow(s_close == 0)){
+  
+}else{
+
 for (j in 1:nrow(s_close)){
   
 
@@ -65,6 +69,9 @@ for (j in 1:nrow(s_close)){
   fee         = leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
   
   cash        = cash + leave_price * vm[product_match] * s_close[j,no_contract]
+  position[product_match] = position[product_match] -1 #adjust position
+  holding[product_match] = holding[product_match] + s_close[j,no_contract] #空仓应该反加回去
+  
   
   trade_out  <- list(
     enter_date = enter_date,
@@ -77,8 +84,8 @@ for (j in 1:nrow(s_close)){
     contracts = s_close[j,no_contract]
     )
   trades <- list.append(trades, trade_out)
-}
-
+  }
+}#end of judging nrow == 0
 # 更新holding,position （请返回上一个loop写）
 
 # 删除standing_contract里面的数据

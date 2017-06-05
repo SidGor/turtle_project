@@ -46,7 +46,7 @@ for (j in 1:length(product_ids)){
         
         position[j] <- t_position[j]     #update the actual position 
         
-        holding[j] <- position[j] * units[j]   #update holdings
+        holding[j] <- holding[j] - units[j]   #update holdings
         
         enter_date <- cdt[[1]][ptr]       
         direction <- -1L                 # 1L long, -1L short
