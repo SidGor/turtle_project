@@ -8,18 +8,25 @@
 #2. 每回合开始的资金控制，一旦判定不及格就以倒叙的形式减仓，那就是说“standing_contract”的顺序往回减并计入损失。
 
 
+library(rlist) #list.append用到了
 #建仓判定：
 
-#1.生成交易单
-long_plan <- sig_long * units  #the aggregate plan of how many *contracts(not tons)* should be add
+enter_date = NA     #中转日期
+direction = NA      #中转合约方向
+enter_price = NA    #中转入场价
+cut_point = NA      #中转止损价
+no_contract = NA    #中转合约数量
 
-t_position = copy(position)#建立测试仓位用的向量
+#1.生成交易单
+long_plan <- sig_long * units  #The aggregate plan of how many *contracts(not tons)* should be add
+
+t_position = copy(position)    #建立测试仓位用的向量
 
 for (j in 1:length(product_ids)){
 
-  if (long_plan[j] == 0) next  #节省运算时间
+  if (long_plan[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
   
-     t_position[j] = (t_position[j] + long_plan[j])/units[j]
+  t_position[j] = floor((t_position[j] + long_plan[j])/units[j]) #计算
   
   #test 1: any direction ,single holding should be less than 4
   if (any(abs(t_position) > 4)) {
@@ -36,11 +43,23 @@ for (j in 1:length(product_ids)){
     
     holding[j] <- holding[j] + long_plan[j]
     
-    date <- bar[date]
+    enter_date <- cdt[[1]][ptr]
     direction <- 1L
-    price <- bar[max55high] + slippage
-    fee <- ?
-    cut <- price - 2 * cdt[[9+(j-1)*15]]
+    enter_price <- cdt[[15 + (j-1) * 15]][ptr] + slippage[j]
+    fee <- fee + enter_price * vm[j] * fee.rate[j]
+    cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]
+    
+    contract <- list(enter_date = enter_date,
+                     direction = direction,
+                     enter_price = enter_price,
+                     cut_point = cut,
+                     no_contract = long_plan[j]
+                     )
+    
+    standing_contract = list.append(standing_contract,contract)
+    
+    cash <- cash - enter_price - fee
+    
     
   }
 
