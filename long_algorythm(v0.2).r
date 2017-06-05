@@ -44,17 +44,17 @@ for (j in 1:length(product_ids)){
     }else if (abs(sum(t_position)) > 12){
     }else {
         
-        position[j] <- t_position[j]
+        position[j] <- t_position[j]     #update the actual position 
         
-        holding[j] <- holding[j] + long_plan[j]
+        holding[j] <- position[j] * units[j]   #update holdings
         
-        enter_date <- cdt[[1]][56]
-        direction <- 1L
-        enter_price <- cdt[[15 + (j-1) * 15]][56] + slippage[j]
-        fee <- fee + enter_price * vm[j] * fee.rate[j]
-        cut <- enter_price - 2 * cdt[[9+(j-1)*15]][56]
+        enter_date <- cdt[[1]][56]       
+        direction <- 1L                 # 1L long, -1L short
+        enter_price <- cdt[[15 + (j-1) * 15]][56] + slippage[j]  #subset the channel price + slippage
+        fee <- fee + enter_price * vm[j] * fee.rate[j]          #update total fee
+        cut <- enter_price - 2 * cdt[[9+(j-1)*15]][56]          #lost cutting point, 2N
         
-        contract <- list(enter_date = enter_date,
+        contract <- list(enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][56],
                          direction = direction,
                          enter_price = enter_price,
@@ -62,9 +62,9 @@ for (j in 1:length(product_ids)){
                          no_contract = long_plan[j]
         )
         
-        standing_contract = list.append(standing_contract,contract)
+        standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
         
-        cash <- cash - enter_price - fee
+        cash <- cash - enter_price - fee                         #update cash
         
     }
     
@@ -73,4 +73,4 @@ for (j in 1:length(product_ids)){
   
 }#开仓loop
 
-sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)
+sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
