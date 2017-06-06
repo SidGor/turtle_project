@@ -228,7 +228,52 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
 
 ####################Open Position##############################################
 
-#system2
+
+  #system2
+  
+  #generate long/short signal
+  highs  <- vector()
+  lows <- vector()
+  highs_55 <- vector()
+  lows_55 <- vector()
+  ATRs  <- vector()
+  
+  sig_long  <- vector()
+  sig_short <- vector()
+  
+  
+  for (j in 1:length(product_ids)){     #extract the high,55high, low,55low
+    
+    highs  <- append(highs,cdt[[4+(j-1)*15]][ptr]) #vector that have high prices
+    highs_55 <- append(highs_55,cdt[[15+(j-1)*15]][ptr]) #vector that have the upper channel
+    lows <- append(lows,cdt[[5+(j-1)*15]][ptr])
+    lows_55 <- append(lows_55,cdt[[16+(j-1)*15]][ptr])
+    ATRs  <- append(ATRs,cdt[[9+(j-1)*15]][ptr]) #help to determin strength of signal
+  }  
+  
+  #Then we will need a vector to see if channels been broke
+  
+  sig_long <- highs > highs_55  #These tell whether we need to long/short
+  sig_short <- lows < lows_55   
+  
+  #But we need to go one step further, how many units to long/short?
+  #Turtle rules add units for every 0.5 * N (ATR), so we need to make
+  #it clear about how many Ns are the prices exceed signals
+  
+  unit_long <- floor((sig_long * highs - sig_long * highs_55)/(0.5*ATRs))  #make sure you don't include any negative number
+  
+  unit_long <- unit_long + 1 #0.5N的情况下应该一共进2个unit，所以整体要+1
+  
+  unit_long[unit_long > 4] = 4 #大于2个N不加仓
+  
+  unit_short <- floor((sig_short * lows_55 - sig_short * lows)/(0.5*ATRs))
+  
+  unit_short <- unit_short + 1
+  
+  unit_short[unit_short > 4] = 4 #大于2个N不继续加空仓    
+  
+  
+  
   enter_date = NA     #中转日期
   product_name = NA     #产品类型
   direction = NA      #中转合约方向
@@ -271,8 +316,10 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
         enter_price <- cdt[[15 + (j-1) * 15]][ptr] + slippage[j]  #subset the channel price + slippage
         fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
         cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
+        trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
-        contract <- list(enter_date = enter_date,                    #saving contract information
+        contract <- list(trade_id = trade_id,
+                         enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][ptr],
                          direction = direction,
                          enter_price = enter_price,
@@ -333,13 +380,15 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
         enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
         fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
         cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
+        trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
-        contract <- list(enter_date = enter_date,                    #saving contract information
+        contract <- list(trade_id = trade_id,
+                         enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][ptr],
                          direction = direction,
                          enter_price = enter_price,
                          cut_point = cut,
-                         no_contract = units[j]                #每次做一个unit
+                         no_contract = units[j]     
         )
         
         standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
