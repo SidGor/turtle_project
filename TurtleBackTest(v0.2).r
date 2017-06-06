@@ -262,13 +262,13 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
   unit_long <- floor((sig_long * highs - sig_long * highs_55)/(0.5*ATRs))  #make sure you don't include any negative number
   
-  unit_long <- unit_long + 1 #0.5N的情况下应该一共进2个unit，所以整体要+1
+  unit_long <- unit_long  + sig_long#0.5N的情况下应该一共进2个unit，所以整体要根据sig加1或者加0
   
   unit_long[unit_long > 4] = 4 #大于2个N不加仓
   
   unit_short <- floor((sig_short * lows_55 - sig_short * lows)/(0.5*ATRs))
   
-  unit_short <- unit_short + 1
+  unit_short <- unit_short + sig_short
   
   unit_short[unit_short > 4] = 4 #大于2个N不继续加空仓    
   
@@ -394,7 +394,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
         standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
         
         
-        cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
+        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
         
       }
       
@@ -415,12 +415,13 @@ sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data
 
 
 
-save_sta_dt <- sta_contract_dt        #需要改回全集
+save_sta_dt <- sta_contract_dt         #需要改回全集
 temp_cdt <- cdt[ptr]                   #需要改回ptr
 
 
 l_contracts <- save_sta_dt[direction == 1]  #存储多单
 s_contracts <- save_sta_dt[direction == -1] #存储空单
+
 
 #提取高低收矩阵
 
@@ -445,12 +446,25 @@ information <- data.table(product_name = product_ids,
 )
 
 #集成表格以便判断是否止损。
-l_contracts <- as.data.table(left_join(l_contracts, information, by = "product_name"))
-s_contracts <- as.data.table(left_join(s_contracts, information, by = "product_name"))
 
+if(nrow(l_contracts) != 0) {
+  
+  l_cont_i <- as.data.table(left_join(l_contracts, information, by = "product_name"))
+  l_close <- l_cont_i[cut_point > lows,]
+  
+}else{
+  
+  l_close = data.table()
+  
+}
 
-l_close <- l_contracts[cut_point > lows,]
-s_close <- s_contracts[cut_point < highs,]
+if(nrow(s_contracts) != 0) {
+  s_contracts <- as.data.table(left_join(s_contracts, information, by = "product_name"))
+  s_close <- s_contracts[cut_point < highs,]
+}else{
+  s_close = data.table()
+}
+
 
 #记录每笔交易信息-平空仓
 if(nrow(s_close) == 0){
@@ -473,7 +487,7 @@ if(nrow(s_close) == 0){
     closed_profit = closed_profit + profit
     fee         = fee + leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
     
-    cash        = cash + leave_price * vm[product_match] * s_close[j,no_contract]
+    cash        = cash - leave_price * vm[product_match] * s_close[j,no_contract] - leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
     position[product_match] = position[product_match] +1 #adjust position
     holding[product_match] = holding[product_match] + s_close[j,no_contract] #空仓应该反加回去
     
@@ -501,7 +515,7 @@ if(nrow(s_close) == 0){
     
   }
   # 更新sta_contract_dt
-  sta_contract_dt <- sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
+  sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
   
   
 }#end of judging nrow == 0
@@ -529,7 +543,7 @@ if(nrow(l_close) == 0){
     closed_profit = closed_profit + profit
     fee         = fee + leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match]
     
-    cash        = cash + leave_price * vm[product_match] * l_close[j,no_contract]
+    cash        = cash + leave_price * vm[product_match] * l_close[j,no_contract] - leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match]
     position[product_match] = position[product_match] - 1 #adjust position
     holding[product_match] = holding[product_match] - l_close[j,no_contract] #空仓应该反加回去,多仓应该反减
     
@@ -557,12 +571,11 @@ if(nrow(l_close) == 0){
     
   }
   # 更新sta_contract_dt
-  sta_contract_dt <- sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
+  sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
   
   
 }#end of judging nrow == 0
 
-trades_dt <- list.stack(trades, data.table = TRUE)
 
 
 #####################End of Close Position#####################################
@@ -577,4 +590,4 @@ trades_dt <- list.stack(trades, data.table = TRUE)
 }# end of main loop
 ######################End of Main Loop#########################################
 
-
+trades_dt <- list.stack(trades, data.table = TRUE)

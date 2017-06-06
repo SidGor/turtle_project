@@ -21,15 +21,15 @@ no_contract = NA    #中转合约数量
 #1.生成交易单
 #long_plan <- sig_long * units  #The aggregate plan of how many *contracts(not tons)* should be add
 
-    #建立测试仓位用的向量,相当于缓存
+#建立测试仓位用的向量,相当于缓存
 
 #
 
 for (j in 1:length(product_ids)){
-
+  
   if (unit_short[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
   t_position = copy(position) #在单日开多单的情况下必须重复读取实际的position，因为
-                              #t_position会在k-loop里面累加，影响到其他产品的测试结果
+  #t_position会在k-loop里面累加，影响到其他产品的测试结果
   for(k in 1:unit_short[j]) {
     
     t_position[j] = t_position[j] - 1
@@ -43,7 +43,6 @@ for (j in 1:length(product_ids)){
       #test 4: any direction, total holding should be less than 12  
     }else if (abs(sum(t_position)) > 12){
     }else {
-        
       
       position[j] <- t_position[j]     #update the actual position 
       
@@ -72,8 +71,9 @@ for (j in 1:length(product_ids)){
       
     }
     
-}#end of k looping for open tests
+    
+  }#end of k looping for open tests
   
-}#开仓loop
+}#开空仓loop
 
 sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
