@@ -86,7 +86,7 @@ for (j in 1:nrow(s_close)){
   trades <- list.append(trades, trade_out)
   }
 }#end of judging nrow == 0
-# 更新holding,position （请返回上一个loop写）
+
 
 # 删除standing_contract里面的数据
 
