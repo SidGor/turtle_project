@@ -2,7 +2,7 @@
 library(quantex) #数据下载
 library(rlist)   #一些好用的列表操作比如list.stack
 library(data.table) 
-library(dplyr)   #在清洁数据的时候需要用到 left_join 以及%>%
+library(dplyr)   #在清洁数据的时候以及平仓模块需要用到 left_join 以及%>%
 library(zoo)     #要使用rollapplyr来算各种滚动数据
 
 ###############################################################################
@@ -318,7 +318,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
         cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
         trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
-        contract <- list(trade_id = trade_id,
+        contract <- data.table(trade_id = trade_id,
                          enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][ptr],
                          direction = direction,
@@ -327,7 +327,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
                          no_contract = units[j]
         )
         
-        standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
+        standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
         
         cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]    #update cash
         
@@ -382,7 +382,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
         cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
         trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
-        contract <- list(trade_id = trade_id,
+        contract <- data.table(trade_id = trade_id,
                          enter_date = enter_date,                    #saving contract information
                          product_name   = cdt[[2 + (j-1) * 15]][ptr],
                          direction = direction,
@@ -391,20 +391,22 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
                          no_contract = units[j]     
         )
         
-        standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
+        standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
         
-        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
+        
+        cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
         
       }
       
       
     }#end of k looping for open tests
     
-  }#开仓loop
-  
-sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
+  }#开空仓loop
 
-sta_contract_dt[,id := c(1:nrow(sta_contract_dt))]  #为每笔交易编号，后面好删
+####################################数据处理##################################  
+names(standing_contract) = list.map(standing_contract, trade_id)     #update trade id as name
+
+sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
 
 
 ####################End of Open Position#######################################
@@ -412,6 +414,155 @@ sta_contract_dt[,id := c(1:nrow(sta_contract_dt))]  #为每笔交易编号，后
 #####################Close Position############################################
 
 
+
+save_sta_dt <- sta_contract_dt        #需要改回全集
+temp_cdt <- cdt[ptr]                   #需要改回ptr
+
+
+l_contracts <- save_sta_dt[direction == 1]  #存储多单
+s_contracts <- save_sta_dt[direction == -1] #存储空单
+
+#提取高低收矩阵
+
+
+c_highs <- vector()           #存储最高价
+c_lows <- vector()            #存储最低价
+c_opens <- vector()           #存储开盘价
+
+for (j in 1:length(product_ids)) {
+  
+  c_highs[j] <- temp_cdt[[4 + (j-1) * 15]]  
+  c_lows[j]  <- temp_cdt[[5 + (j-1) * 15]]
+  c_opens[j] <- temp_cdt[[3 + (j-1) * 15]]
+  
+}
+
+#集成每个产品当日的相关数据
+information <- data.table(product_name = product_ids,
+                          highs = c_highs,
+                          lows  = c_lows,
+                          opens = c_opens
+)
+
+#集成表格以便判断是否止损。
+l_contracts <- as.data.table(left_join(l_contracts, information, by = "product_name"))
+s_contracts <- as.data.table(left_join(s_contracts, information, by = "product_name"))
+
+
+l_close <- l_contracts[cut_point > lows,]
+s_close <- s_contracts[cut_point < highs,]
+
+#记录每笔交易信息-平空仓
+if(nrow(s_close) == 0){
+  
+}else{
+  
+  for (j in 1:nrow(s_close)){
+    
+    
+    product_match = match(s_close[j,product_name],product_ids)
+    
+    trade_id    = s_close[j, trade_id]
+    enter_date  = s_close[j,enter_date]
+    enter_price = s_close[j,enter_price]
+    leave_date  = cdt[ptr,date]
+    leave_price = s_close[j,cut_point] + slippage[product_match] 
+    ori_direction = s_close[j,direction]
+    commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
+    profit      = (enter_price - leave_price) * vm[product_match] * s_close[j,no_contract] 
+    closed_profit = closed_profit + profit
+    fee         = fee + leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
+    
+    cash        = cash + leave_price * vm[product_match] * s_close[j,no_contract]
+    position[product_match] = position[product_match] +1 #adjust position
+    holding[product_match] = holding[product_match] + s_close[j,no_contract] #空仓应该反加回去
+    
+    
+    trade_out  <- data.table(
+      trade_id   = trade_id,
+      enter_date = enter_date,
+      enter_price = enter_price,
+      leave_date = leave_date,
+      leave_price = leave_price,
+      long_short = ori_direction,
+      commision = commision,
+      profit    = profit,
+      contracts = s_close[j,no_contract]
+    )
+    trades <- list.append(trades, trade_out)
+  }
+  # 删除standing_contract里面的数据
+  
+  d_trades <- list.map(trades, trade_id)
+  
+  for (l in 1:length(d_trades)){
+    
+    standing_contract[d_trades[[l]]] = NULL
+    
+  }
+  # 更新sta_contract_dt
+  sta_contract_dt <- sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
+  
+  
+}#end of judging nrow == 0
+
+
+
+#记录每笔交易信息-平多仓
+if(nrow(l_close) == 0){
+  
+}else{
+  
+  for (j in 1:nrow(l_close)){
+    
+    
+    product_match = match(l_close[j,product_name],product_ids)
+    
+    trade_id    = l_close[j, trade_id]
+    enter_date  = l_close[j, enter_date]
+    enter_price = l_close[j, enter_price]
+    leave_date  = cdt[ptr, date]
+    leave_price = l_close[j, cut_point] - slippage[product_match]   #go against the trade 
+    ori_direction = l_close[j, direction]
+    commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
+    profit      = (leave_price - enter_price) * vm[product_match] * l_close[j,no_contract] 
+    closed_profit = closed_profit + profit
+    fee         = fee + leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match]
+    
+    cash        = cash + leave_price * vm[product_match] * l_close[j,no_contract]
+    position[product_match] = position[product_match] - 1 #adjust position
+    holding[product_match] = holding[product_match] - l_close[j,no_contract] #空仓应该反加回去,多仓应该反减
+    
+    
+    trade_out  <- data.table(
+      trade_id   = trade_id,
+      enter_date = enter_date,
+      enter_price = enter_price,
+      leave_date = leave_date,
+      leave_price = leave_price,
+      long_short = ori_direction,
+      commision = commision,
+      profit    = profit,
+      contracts = l_close[j,no_contract]
+    )
+    trades <- list.append(trades, trade_out)
+  }
+  # 删除standing_contract里面的数据
+  
+  d_trades <- list.map(trades, trade_id)
+  
+  for (l in 1:length(d_trades)){
+    
+    standing_contract[d_trades[[l]]] = NULL
+    
+  }
+  # 更新sta_contract_dt
+  sta_contract_dt <- sta_contract_dt <-  list.stack(standing_contract, data.table = TRUE)   #use data.frame for easy tracking
+  
+  
+}#end of judging nrow == 0
+
+trades_dt <- list.stack(trades, data.table = TRUE)
 
 
 #####################End of Close Position#####################################

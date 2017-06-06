@@ -44,32 +44,33 @@ for (j in 1:length(product_ids)){
     }else if (abs(sum(t_position)) > 12){
     }else {
         
-        position[j] <- t_position[j]     #update the actual position 
-        
-        holding[j] <- holding[j] - units[j]   #update holdings
-        
-        enter_date <- cdt[[1]][ptr]       
-        direction <- -1L                 # 1L long, -1L short
-        enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
-        fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
-        cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
-        trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
-        
-        contract <- list(trade_id = trade_id,
-                         enter_date = enter_date,                    #saving contract information
-                         product_name   = cdt[[2 + (j-1) * 15]][ptr],
-                         direction = direction,
-                         enter_price = enter_price,
-                         cut_point = cut,
-                         no_contract = units[j]     
-        )
-        
-        standing_contract = list.append(standing_contract,contract)  #adding contract to current holding
-        
-        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
-        
+      
+      position[j] <- t_position[j]     #update the actual position 
+      
+      holding[j] <- holding[j] - units[j]   #update holdings
+      
+      enter_date <- cdt[[1]][ptr]       
+      direction <- -1L                 # 1L long, -1L short
+      enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
+      fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
+      cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
+      trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
+      
+      contract <- data.table(trade_id = trade_id,
+                             enter_date = enter_date,                    #saving contract information
+                             product_name   = cdt[[2 + (j-1) * 15]][ptr],
+                             direction = direction,
+                             enter_price = enter_price,
+                             cut_point = cut,
+                             no_contract = units[j]     
+      )
+      
+      standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
+      
+      
+      cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
+      
     }
-    
     
 }#end of k looping for open tests
   
