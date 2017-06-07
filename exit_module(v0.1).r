@@ -14,8 +14,8 @@ save_fee = fee
 save_trades = trades
 #############################################################################
 
-temp_cdt <- cdt[ptr]                   #需要改回ptr
 
+temp_cdt <- cdt[ptr]                   #需要改回ptr
 
 l_contracts <- sta_contract_dt[direction == 1]  #存储多单
 s_contracts <- sta_contract_dt[direction == -1] #存储空单
@@ -100,6 +100,7 @@ if(nrow(s_exit) == 0){
     
     trade_out_e  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -156,6 +157,7 @@ if(nrow(l_exit) == 0){
     
     trade_out_e  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -181,22 +183,6 @@ if(nrow(l_exit) == 0){
   
   
 }#end of judging nrow == 0
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

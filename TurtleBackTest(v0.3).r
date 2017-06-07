@@ -498,6 +498,7 @@ if(nrow(s_close) == 0){
     
     trade_out  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -554,6 +555,7 @@ if(nrow(l_close) == 0){
     
     trade_out  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -672,6 +674,7 @@ if(nrow(s_exit) == 0){
     
     trade_out_e  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -728,6 +731,7 @@ if(nrow(l_exit) == 0){
     
     trade_out_e  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,

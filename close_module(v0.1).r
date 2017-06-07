@@ -19,6 +19,9 @@ save_trades = trades
 
 
 
+
+
+
 save_sta_dt <- sta_contract_dt         #需要改回全集
 temp_cdt <- cdt[ptr]                   #需要改回ptr
 
@@ -98,6 +101,7 @@ if(nrow(s_close) == 0){
     
     trade_out  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -154,6 +158,7 @@ if(nrow(l_close) == 0){
     
     trade_out  <- data.table(
       trade_id   = trade_id,
+      item       = product_ids[product_match],
       enter_date = enter_date,
       enter_price = enter_price,
       leave_date = leave_date,
@@ -179,7 +184,6 @@ if(nrow(l_close) == 0){
   
   
 }#end of judging nrow == 0
-
 
 
 ###############################################################################
