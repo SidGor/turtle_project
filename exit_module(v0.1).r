@@ -1,5 +1,5 @@
 ############################  Exit Strategy  ##################################
-
+library(dplyr)
 ##########################Test Environment#####################################
 #backing up the original data
 #

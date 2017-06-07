@@ -11,7 +11,7 @@ library(zoo)     #要使用rollapplyr来算各种滚动数据
 #####################Input & Lists ############################################
 
 product_ids          <- c("rb", "cu", "al")          ##########################
-start_date           <- 20150101                     ##########  DATA  ########  
+start_date           <- 20140101                     ##########  DATA  ########  
 end_date             <- 20161231                     ########  LOADING  ####### 
 frequency            <- "day"                        ##########################
 
@@ -60,7 +60,7 @@ close_sys             <- NULL  #后面可以用这个控制使用什么平仓规
 data                  <- list()          #存储价格数据
 trades                <- list()          #交易记录
 standing_contract     <- list()          #持仓记录
-asset_sheet           <- list()          #资产记录
+asset_list            <- list()          #资产记录
 
 
 #非常有用的bar和pre方程，节省很多工作量：
@@ -760,30 +760,68 @@ if(nrow(l_exit) == 0){
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#############################End of Exit Strategy##############################
-
-
-
 #####################End of Exit Strategy######################################
 
 #####################Asset Chart Update########################################
+
+if(nrow(sta_contract_dt) != 0){
+
+  
+    
+
+  a_cont  <- sta_contract_dt
+  a_close <- vector()           #存储收盘价
+
+  
+  for (j in 1:length(product_ids)) {
+    
+    a_close[j] <- cdt[[6 + (j-1) * 15]][ptr]  
+    
+  }
+  
+  cls_status <- data.table(product_name = product_ids,
+                           vm           = vm,
+                           close        = a_close)
+  
+  a_cont     <- as.data.table(left_join(a_cont, cls_status, by = "product_name")) 
+  
+  
+  asset_out <- data.table(
+    date = cdt[ptr,date], 
+    cash = cash,
+    fee  = fee,
+    holding_value = sum(holding * vm * a_close), 
+    pos_profit = sum(a_cont$direction * (a_cont$close - a_cont$enter_price) * a_cont$no_contract * a_cont$vm),
+    pos_dir = sum(position),
+    closed_profit = closed_profit
+  )
+  
+  
+  asset_list <- list.append(asset_list, asset_out)
+  
+}else{ 
+
+  a_close <- vector()           #存储收盘价
+  
+  for (j in 1:length(product_ids)) {
+    
+    a_close[j] <- cdt[[6 + (j-1) * 15]][ptr]  
+    
+  }
+  
+  asset_out <- data.table(
+    date = cdt[ptr,date], 
+    cash = cash,
+    fee  = fee,
+    holding_value = sum(holding*a_close), 
+    pos_profit = "no holding",
+    pos_dir = sum(position),
+    closed_profit = closed_profit
+  )
+  
+  
+  
+}#end of if nrow(sta_contract_dt == 0)
 #####################End of Asset Chart Update#################################
 
   
@@ -791,3 +829,13 @@ if(nrow(l_exit) == 0){
 ######################End of Main Loop#########################################
 
 trades_dt <- list.stack(trades, data.table = TRUE)
+
+trades_dt[, net_profit := profit - commission]  
+
+asset_dt  <- list.stack(asset_list, data.table = TRUE)
+
+asset_dt[, net_profit := closed_profit + pos_profit - fee]
+asset_dt[, profit := c(0,diff(net_profit))] 
+asset_dt[, cum_profit := cumsum(profit)]
+asset_dt[, cummax_cum_profit := cummax(cum_profit)]
+asset_dt[, drawdown := cum_profit - cummax_cum_profit]
