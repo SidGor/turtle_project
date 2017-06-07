@@ -53,8 +53,8 @@ information <- data.table(product_name = product_ids,
 
 if(nrow(l_contracts) != 0) {
   
-  l_cont_i <- as.data.table(left_join(l_contracts, information, by = "product_name"))
-  l_close <- l_cont_i[cut_point > lows,]
+  l_contracts <- as.data.table(left_join(l_contracts, information, by = "product_name"))
+  l_close <- l_contracts[cut_point > lows,]
   
 }else{
   
