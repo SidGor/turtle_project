@@ -5,7 +5,7 @@ library(rlist)   #一些好用的列表操作比如list.stack
 library(data.table) 
 library(dplyr)   #在清洁数据的时候以及平仓模块需要用到 left_join 以及%>%
 library(zoo)     #要使用rollapplyr来算各种滚动数据
-
+library(ggplot2)
 ###############################################################################
 
 #####################Input & Lists ############################################
@@ -51,7 +51,7 @@ corr_mat             <- list(                       #两个判定风险的相关
                                     dimnames = list(product_ids, product_ids)
                                           ),
                         
-                        lslcorr = matrix(c(1,0,0,0,1,0,0,0,1),3,3,
+                        lslcorr = matrix(c(1,0,1,0,1,0,1,0,1),3,3,
                                      dimnames = list(product_ids, product_ids)
 ))
 
@@ -1053,6 +1053,67 @@ asset_dt  <- list.stack(asset_list, data.table = TRUE)
 
 asset_dt[, net_profit := closed_profit + pos_profit - fee]
 asset_dt[, profit := c(0,diff(net_profit))] 
+
+
+###########################Performance##########################################
+
+
+# 计算每日收益率：（不加杠杆，return = 当日净收益/合约市值的60日移动平均）
+asset_dt[, return := profit / (cash + holding_value)]
+calc_annual_return <- function(x){ # 根据日度收益率计算年化收益率
+  prod(1 + x) ^(250 / length(x)) - 1
+}
+calc_sharpe_ratio <- function(x){ # 根据日度收益率计算 sharpe ratio
+  calc_annual_return(x) / (sqrt(250) * sd(x))
+}
+# 年化收益率
+annual_return <- calc_annual_return(asset_dt$return)
+# 夏普比
+sharpe_ratio <- calc_sharpe_ratio(asset_dt$return)
+# 最大回撤
 asset_dt[, cum_profit := cumsum(profit)]
 asset_dt[, cummax_cum_profit := cummax(cum_profit)]
 asset_dt[, drawdown := cum_profit - cummax_cum_profit]
+
+maxdrawdown <- min(asset_dt$drawdown)
+maxdrawdown_idx <- which.min(asset_dt$drawdown)
+maxdrawdown_per <-
+  asset_dt[maxdrawdown_idx, drawdown] /
+  asset_dt[maxdrawdown_idx, cummax_cum_profit]
+# 胜率
+win_prob <- mean(trades_dt$profit > 0)
+# 平均盈亏比
+win_loss_ratio <-
+  (sum(trades_dt[profit > 0, profit]) / trades_dt[profit > 0, .N]) /
+  (sum(trades_dt[profit <= 0, -profit]) / trades_dt[profit <= 0, .N])
+indicators <- sprintf("
+                      年化收益率：%s
+                      Sharpe_Ratio: %f
+                      最大资金回撤：%f（百分比：%s）
+                      胜率：%s
+                      平均盈亏比：%f
+                      ",
+                      scales::percent(annual_return),
+                      sharpe_ratio,
+                      maxdrawdown, scales::percent(maxdrawdown_per),
+                      scales::percent(win_prob),
+                      win_loss_ratio
+)
+cat(indicators)
+
+
+# 找出利润最大的一次交易
+trades_dt[which.max(trades_dt$profit), .(enter_date, leave_date)]
+
+# 资金曲线
+plot(asset_dt$net_profit, type = "l")
+
+
+hist(trades_dt$profit, breaks = 50)
+
+
+par(mfrow = c(3, 1))
+plot(asset_dt$net_profit, type = "l", main = "account") # 账户资金曲线
+plot(asset_dt$return, type = "h", main = "daily return") # 日度收益率
+plot(asset_dt$pos_dir, type = "h", main = "position") # 每日postion
+par(mfrow = c(1,1))
