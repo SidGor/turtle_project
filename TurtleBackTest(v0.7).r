@@ -10,15 +10,14 @@ library(ggplot2)
 
 #####################Input & Lists ############################################
 
-product_ids          <- c("cu","al","zn","pb","au","rb","ag"
-#                          ,"fu","bu","ru","c","hc"
-#                          ,"m","a","y","p","fb","bb","jd","l" ,"pp" ,"j","jm","i","SR"
-#                        ,"CF","TA","WH",
-#                          "OI","MA","FG","RM","TC"
+product_ids          <- c("cu","al","zn","pb","au","rb","ag","TC"
+                          ,"fu","bu","ru","c","hc"
+                          ,"m","a","y","p","fb","bb","jd","l" ,"pp" ,"j","jm","i","SR"
+                        ,"CF","TA","WH","OI","MA","FG","RM"
                           )  
                                                     ##########################
 start_date           <- 20100101                     ##########  DATA  ########  
-end_date             <- 20130719                    ########  LOADING  ####### 
+end_date             <- 20161230                   ########  LOADING  ####### 
 frequency            <- "day"                        ##########################
 
 
@@ -27,7 +26,7 @@ frequency            <- "day"                        ##########################
 # "j","jm","i","WH","PM","SR","CF","TA","OI",
 # "MA","FG","RM","TC")
 
-# wr，PM,RS,JR,v,"WH"的数据长度不足
+# wr，PM,RS,JR,v,"WH","TC"的数据长度不足
 
 vm                   <- as.vector(as.matrix(list.stack(products[product_ids], 
                                      data.table = TRUE)[,4]))    
@@ -45,7 +44,12 @@ slippage             <- as.vector(as.matrix(list.stack(products[product_ids],
                                      data.table = TRUE)[,3]))  #读取滑点         
                                                              
 fee.rate             <- as.vector(as.matrix((list.stack(products[product_ids], 
-                                     data.table = TRUE)[,5])))         
+                                     data.table = TRUE)[,5])))  
+
+fee_rate_fix         <- as.vector(as.matrix((list.stack(products[product_ids], 
+                                                        data.table = TRUE)[,6])))  
+
+last_a_close = rep(0,length(product_ids)) #在asset record环节记录上一期有效收盘价
 
 fee                  <- 0
 
@@ -201,7 +205,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
   
   for (j in 1:length(product_ids)){
     
-    NxDPPs[j] <- as.numeric(cdt[[15*j-5]][ptr])  #根据相对位置提取N*DPP以计算Unit限制 
+    NxDPPs[j] <- as.numeric(cdt[[ptr, 10 + (j-1)*15]])  #根据相对位置提取N*DPP以计算Unit限制 
     
   }
   
@@ -214,7 +218,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
   #test 1
   threshold_1 = 4     #单向判断，请记得改回12
   
-  position = holding/units
+  position = na.fill(holding/units,0)
   
   judgement = -1*(holding>=0) + 1 * (holding <0)   #这个可以用于判定计算应调整仓位时的
                                                    #正负方向,与持仓方向相反
@@ -242,9 +246,9 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     commision   = leave_price * vm[pick_1] + enter_price * vm[pick_1]
     profit      = -judgement[pick_1] * (leave_price - enter_price) * vm[pick_1] * a_close_1$no_contract 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[pick_1] * a_close_1$no_contract * fee.rate[pick_1]
+    fee         = fee + leave_price * vm[pick_1] * a_close_1$no_contract * fee.rate[pick_1] + fee_rate_fix[pick_1]
     
-    cash        = cash + judgement[pick_1] * leave_price * vm[pick_1] * a_close_1$no_contract - leave_price * vm[pick_1] * a_close_1$no_contract * fee.rate[pick_1]
+    cash        = cash + judgement[pick_1] * leave_price * vm[pick_1] * a_close_1$no_contract - leave_price * vm[pick_1] * a_close_1$no_contract * fee.rate[pick_1] - fee_rate_fix[pick_1]
     
     trade_out_a  <- data.table(
       trade_id   = trade_id,
@@ -264,7 +268,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     
     sta_contract_dt <- list.stack(standing_contract, data.table = TRUE)
     
-    position = holding/units
+    position = na.fill(holding/units,0)
     
     test_1 = abs(position) - threshold_1
     
@@ -275,7 +279,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
   
   threshold_2 = 6     #风险控制，请记得改回6
   
-  position = (holding/units)
+  position = na.fill((holding/units),0)
   
   position[is.na(position)] = 0
   
@@ -306,9 +310,9 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     commision   = leave_price * vm[pick_2] + enter_price * vm[pick_2]
     profit      = -judgement[pick_2] * (leave_price - enter_price) * vm[pick_2] * a_close_2$no_contract 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[pick_2] * a_close_2$no_contract * fee.rate[pick_2]
+    fee         = fee + leave_price * vm[pick_2] * a_close_2$no_contract * fee.rate[pick_2] + fee_rate_fix[pick_2]
     
-    cash        = cash + judgement[pick_2] * leave_price * vm[pick_2] * a_close_2$no_contract - leave_price * vm[pick_2] * a_close_2$no_contract * fee.rate[pick_2]
+    cash        = cash + judgement[pick_2] * leave_price * vm[pick_2] * a_close_2$no_contract - leave_price * vm[pick_2] * a_close_2$no_contract * fee.rate[pick_2] - fee_rate_fix[pick_2]
     
     trade_out_a2  <- data.table(
       trade_id   = trade_id,
@@ -328,7 +332,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     
     sta_contract_dt <- list.stack(standing_contract, data.table = TRUE)
     
-    position = holding/units
+    position = na.fill(holding/units,0)
     
     test_2 = abs(position %*% corr_mat[[1]]) - threshold_2
     
@@ -339,7 +343,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
   
   threshold_3 = 10     #风险控制，请记得改回10
   
-  position = holding/units
+  position = na.fill(holding/units,0)
   
   position[is.na(position)] = 0
   
@@ -369,9 +373,9 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     commision   = leave_price * vm[pick_3] + enter_price * vm[pick_3]
     profit      = -judgement[pick_3] * (leave_price - enter_price) * vm[pick_3] * a_close_3$no_contract 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[pick_3] * a_close_3$no_contract * fee.rate[pick_3]
+    fee         = fee + leave_price * vm[pick_3] * a_close_3$no_contract * fee.rate[pick_3] + fee_rate_fix[pick_3]
     
-    cash        = cash + judgement[pick_3] * leave_price * vm[pick_3] * a_close_3$no_contract - leave_price * vm[pick_3] * a_close_3$no_contract * fee.rate[pick_3]
+    cash        = cash + judgement[pick_3] * leave_price * vm[pick_3] * a_close_3$no_contract - leave_price * vm[pick_3] * a_close_3$no_contract * fee.rate[pick_3] - fee_rate_fix[pick_3]
     
     trade_out_a3  <- data.table(
       trade_id   = trade_id,
@@ -391,7 +395,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     
     sta_contract_dt <- list.stack(standing_contract, data.table = TRUE)
     
-    position = holding/units
+    position = na.fill(holding/units,0)
     
     test_3 = abs(position %*% corr_mat[[2]]) - threshold_3
     
@@ -429,9 +433,9 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
     commision   = leave_price * vm[pick_4] + enter_price * vm[pick_4]
     profit      = -judgement[pick_4] * (leave_price - enter_price) * vm[pick_4] * a_close_4$no_contract 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[pick_4] * a_close_4$no_contract * fee.rate[pick_4]
+    fee         = fee + leave_price * vm[pick_4] * a_close_4$no_contract * fee.rate[pick_4] + fee_rate_fix[pick_4]
     
-    cash        = cash + judgement[pick_4] * leave_price * vm[pick_4] * a_close_4$no_contract - leave_price * vm[pick_4] * a_close_4$no_contract * fee.rate[pick_4]
+    cash        = cash + judgement[pick_4] * leave_price * vm[pick_4] * a_close_4$no_contract - leave_price * vm[pick_4] * a_close_4$no_contract * fee.rate[pick_4] - fee_rate_fix[pick_4]
     
     trade_out_a4  <- data.table(
       trade_id   = trade_id,
@@ -548,7 +552,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
         enter_date <- cdt[[1]][ptr]       
         direction <- 1L                 # 1L long, -1L short
         enter_price <- cdt[[15 + (j-1) * 15]][ptr] + slippage[j]  #subset the channel price + slippage
-        fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
+        fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j] + fee_rate_fix[j]          #update total fee
         cut <- enter_price - 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
         trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
@@ -563,7 +567,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
         
         standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
         
-        cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]    #update cash
+        cash <- cash - enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j] - fee_rate_fix[j]    #update cash
         
       }
       
@@ -613,7 +617,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
         enter_date <- cdt[[1]][ptr]       
         direction <- -1L                 # 1L long, -1L short
         enter_price <- cdt[[16 + (j-1) * 15]][ptr] - slippage[j]  #subset the channel price - slippage
-        fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j]          #update total fee
+        fee <- fee + enter_price * units[j] * vm[j] * fee.rate[j] + fee_rate_fix[j]          #update total fee
         cut <- enter_price + 2 * cdt[[9+(j-1)*15]][ptr]          #lost cutting point, 2N
         trade_id <- paste("|",direction,"|",enter_date,cdt[[2 + (j-1) * 15]][ptr],"00",k,sep = "")
         
@@ -629,7 +633,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop #debug之后记得改回nrow(cdt)
         standing_contract = list.append(standing_contract, contract)  #adding contract to current holding
         
         
-        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j]   #update cash
+        cash <- cash + enter_price * units[j] * vm[j] - enter_price * units[j] * vm[j] * fee.rate[j] - fee_rate_fix[j]   #update cash
         
       }
       
@@ -722,9 +726,9 @@ if(nrow(s_close) == 0){
     commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
     profit      = (enter_price - leave_price) * vm[product_match] * s_close[j,no_contract] 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
+    fee         = fee + leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match] + fee_rate_fix[product_match]
     
-    cash        = cash - leave_price * vm[product_match] * s_close[j,no_contract] - leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match]
+    cash        = cash - leave_price * vm[product_match] * s_close[j,no_contract] - leave_price * vm[product_match] * s_close[j,no_contract] * fee.rate[product_match] - fee_rate_fix[product_match]
     position[product_match] = position[product_match] +1 #adjust position
     holding[product_match] = holding[product_match] + s_close[j,no_contract] #空仓应该反加回去
     
@@ -779,9 +783,9 @@ if(nrow(l_close) == 0){
     commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
     profit      = (leave_price - enter_price) * vm[product_match] * l_close[j,no_contract] 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match]
+    fee         = fee + leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match] + fee_rate_fix[product_match]
     
-    cash        = cash + leave_price * vm[product_match] * l_close[j,no_contract] - leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match]
+    cash        = cash + leave_price * vm[product_match] * l_close[j,no_contract] - leave_price * vm[product_match] * l_close[j,no_contract] * fee.rate[product_match] - fee_rate_fix[product_match]
     position[product_match] = position[product_match] - 1 #adjust position
     holding[product_match] = holding[product_match] - l_close[j,no_contract] #空仓应该反加回去,多仓应该反减
     
@@ -898,9 +902,9 @@ if(nrow(s_exit) == 0){
     commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
     profit      = (enter_price - leave_price) * vm[product_match] * s_exit[j,no_contract] 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[product_match] * s_exit[j,no_contract] * fee.rate[product_match]
+    fee         = fee + leave_price * vm[product_match] * s_exit[j,no_contract] * fee.rate[product_match] + fee_rate_fix[product_match]
     
-    cash        = cash - leave_price * vm[product_match] * s_exit[j,no_contract] - leave_price * vm[product_match] * s_exit[j,no_contract] * fee.rate[product_match]
+    cash        = cash - leave_price * vm[product_match] * s_exit[j,no_contract] - leave_price * vm[product_match] * s_exit[j,no_contract] * fee.rate[product_match] - fee_rate_fix[product_match]
     position[product_match] = position[product_match] +1 #adjust position
     holding[product_match] = holding[product_match] + s_exit[j,no_contract] #空仓应该反加回去
     
@@ -955,9 +959,9 @@ if(nrow(l_exit) == 0){
     commision   = leave_price * vm[product_match] + enter_price * vm[product_match]
     profit      = (leave_price - enter_price) * vm[product_match] * l_exit[j,no_contract] 
     closed_profit = closed_profit + profit
-    fee         = fee + leave_price * vm[product_match] * l_exit[j,no_contract] * fee.rate[product_match]
+    fee         = fee + leave_price * vm[product_match] * l_exit[j,no_contract] * fee.rate[product_match] + fee_rate_fix[product_match]
     
-    cash        = cash + leave_price * vm[product_match] * l_exit[j,no_contract] - leave_price * vm[product_match] * l_exit[j,no_contract] * fee.rate[product_match]
+    cash        = cash + leave_price * vm[product_match] * l_exit[j,no_contract] - leave_price * vm[product_match] * l_exit[j,no_contract] * fee.rate[product_match] - fee_rate_fix[product_match]
     position[product_match] = position[product_match] - 1 #adjust position
     holding[product_match] = holding[product_match] - l_exit[j,no_contract] #空仓应该反加回去,多仓应该反减
     
@@ -997,27 +1001,23 @@ if(nrow(l_exit) == 0){
 
 #####################Asset Chart Update########################################
 
+a_close <- vector() #存储收盘价
+
+for (j in 1:length(product_ids)) {
+  
+  a_close[j] <- cdt[[ptr,6+(j-1)*15]]  
+  
+}
+
+a_close[na.fill(is.na(a_close),1)] = last_a_close[na.fill(is.na(a_close),1)]
+
+position = na.fill(holding/units,0) #更新一下position
+
 if(nrow(sta_contract_dt) != 0){
 
   a_cont  <- sta_contract_dt
-  a_close <- vector()           #存储收盘价
-
-  
-  for (j in 1:length(product_ids)) {
-    
-    a_close[j] <- cdt[[ptr,6+(j-1)*15]]  
-    
-  }
-  
-  if( any(is.na(a_close)) & ptr != 56 ) {
-    
-
-    filling = is.na(a_close) * last_a_close
-    a_close_2 = na.fill(a_close, 0)  #fill with 0 for addition
-    a_close = a_close_2 + filling
 
 
-  }  
   cls_status <- data.table(product_name = product_ids,
                            vm           = vm,
                            close        = a_close)
@@ -1034,24 +1034,10 @@ if(nrow(sta_contract_dt) != 0){
     closed_profit = closed_profit
   )
   
-  last_a_close = a_close #save it for na.fill next period if needed
 
   
 }else{ 
 
-  a_close <- vector()           #存储收盘价
-  
-  for (j in 1:length(product_ids)) {
-    
-    a_close[j] <- cdt[[ptr,6+(j-1)*15]]  
-    
-  }
-
-  if( any(is.na(a_close)) & ptr != 56 ) {             #填补na值
-    filling = is.na(a_close) * last_a_close
-    a_close_2 = na.fill(a_close, 0)  #fill with 0 for addition
-    a_close = a_close_2 + filling
-  }
   
   if(length(asset_list) == 0){
     pos_profit = 0
@@ -1070,19 +1056,23 @@ if(nrow(sta_contract_dt) != 0){
     closed_profit = closed_profit
   )
   
-  last_a_close = a_close
-  
+
 }#end of if nrow(sta_contract_dt == 0)
 
 asset_list <- list.append(asset_list, asset_out)
 
+last_a_close[na.fill(!is.na(a_close),0)] = a_close[!is.na(a_close)]
+
 ###########################增加持仓记录模块####################################
+
+
 
 position_rec <- as.data.table(t(c(as.character(cdt[ptr,date]),round(position,2))))
 holding_rec  <- as.data.table(t(c(as.character(cdt[ptr,date]),round(holding,2))))
 
 position_list <- list.append(position_list, position_rec)
 holding_list <- list.append(holding_list, holding_rec)
+
 
 #####################End of Asset Chart Update#################################
 
