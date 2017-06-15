@@ -13,12 +13,14 @@ library(ggplot2)
 product_ids          <- c("cu","al","zn","pb","au","rb","ag","TC"
                           ,"fu","bu","ru","c","hc"
                           ,"m","a","y","p","fb","bb","jd","l" ,"pp" ,"j","jm","i","SR"
-                        ,"CF","TA","WH","OI","MA","FG","RM"
+                          ,"CF","TA","WH","OI","MA","FG","RM"
                           )  
                                                     ##########################
 start_date           <- 20100101                     ##########  DATA  ########  
 end_date             <- 20161230                   ########  LOADING  ####### 
 frequency            <- "day"                        ##########################
+
+
 
 
 #("cu","al","zn","pb","au","ag","rb","wr","hc","fu","bu",
