@@ -10,8 +10,8 @@ library(ggplot2)
 
 #####################Input & Lists ############################################
 
-product_ids          <- c("rb","cu","al")  ##########################
-start_date           <- 20150101                     ##########  DATA  ########  
+product_ids          <- c("cu","al","zn","pb","au","ag","rb","hc","fu")  ##########################
+start_date           <- 20140101                     ##########  DATA  ########  
 end_date             <- 20161231                     ########  LOADING  ####### 
 frequency            <- "day"                        ##########################
 
@@ -94,9 +94,7 @@ for (i in 1:length(product_ids)) {
                                         trading_day = start_date ~ end_date, 
                                         type = frequency)
 
-  if (nrow(data[[i]]) < 22)  {
-    stop(paste(product_ids[[i]],"doesn't contain over 21 rows for calculation"))
-  }
+
 #简化数据↓  
   data[[i]] <- na.omit(data[[i]][, .(date = trading_day, 
                         code = instrument_id, open, high, low, close, volume)])
@@ -124,7 +122,7 @@ for (i in 1:length(product_ids)) {
   #↑除了计算ATR之外，还需要lag一个单位以避免未来数据
   #(这样做后面可以用NA直接跳过不用交易的日期，否则开仓算法容易报错)
   
-  data[[i]][, NxDPP := vm[1]*ATR]   #这个就是待除的N*DPP，本来想合并三个公式，
+  data[[i]][, NxDPP := vm[i]*ATR]   #这个就是待除的N*DPP，本来想合并三个公式，
                                     #但那样的可读性会极其差，放弃了。 
   
 #添加 10日及20日收盘最高最低线（一共有4条）
@@ -150,6 +148,10 @@ for (i in 1:length(product_ids)) {
     
 }#end of product data downloading loop
 
+
+if (nrow(data[[i]]) < 56)  {
+  stop(paste(product_ids[[i]],"doesn't contain over 56 rows for calculation"))
+}else {  
 
 
 names(data) = product_ids            #命名
@@ -178,7 +180,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
 #跳过前面N行
   
-  if(is.na(cdt[ptr,max55high])) next
+  if(is.na(cdt[ptr,max55high.x])) next
 
 
 #####################Asset Monitor#############################################
@@ -222,7 +224,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
   test_1 = abs(position) - threshold_1             #大于瓶颈的仓位都会大于0
   
-  while(max(test_1) > 0){
+  while(max(na.exclude(test_1)) > 0){
     
     a_items_1 <- product_ids[(test_1 >0)]          #subset对应的品名
     
@@ -276,13 +278,15 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
   threshold_2 = 6     #风险控制，请记得改回6
   
-  position = holding/units
+  position = (holding/units)
+  
+  position[is.na(position)] = 0
   
   judgement = -1*(holding>=0) + 1 * (holding <0)   #这个可以用于判定计算应调整仓位时的正负方向,与持仓方向相反
   
   test_2 = abs(position %*% corr_mat[[1]]) - threshold_2
   
-  while(max(test_2) > 0){
+  while(na.exclude(max(test_2)) > 0){
     
     test_2_adj = test_2*(test_2>0) * judgement
     
@@ -339,6 +343,8 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   threshold_3 = 10     #风险控制，请记得改回10
   
   position = holding/units
+  
+  position[is.na(position)] = 0
   
   judgement = -1*(holding>=0) + 1 * (holding <0)   #这个可以用于判定计算应调整仓位时的正负方向,与持仓方向相反
   
@@ -398,15 +404,15 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
   threshold_4 = 12     #单向判断，请记得改回12
   
-  position = holding/units
+  position_4 <- na.fill((holding/units),0)
   
   judgement = -1*(holding>=0) + 1 * (holding <0)   #这个可以用于判定计算应调整仓位时的正负方向,与持仓方向相反
   
-  test_4 = abs(sum(position)) - threshold_4
+  test_4 = abs(sum(na.omit(position_4))) - threshold_4
   
   while(max(test_4) > 0){
     
-    a_items_4 <- product_ids[(position * sum(position)) >0] 
+    a_items_4 <- product_ids[(na.fill(position,0) * sum(na.fill(position,0))) >0] 
     
     
     
@@ -448,7 +454,7 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
     
     sta_contract_dt <- list.stack(standing_contract, data.table = TRUE)
     
-    position = holding/units
+    position = na.fill(holding/units,0)
     
     test_4 = abs(sum(position)) - threshold_4
   }#end of test 4
@@ -519,22 +525,24 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   
   for (j in 1:length(product_ids)){
     
-    if (unit_long[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
-    t_position = copy(position) #在单日开多单的情况下必须重复读取实际的position，因为
-    #t_position会在k-loop里面累加，影响到其他产品的测试结果
-    for(k in 1:unit_long[j]) {
+    if (is.na(unit_long[j])){ next
+    }else if (unit_long[j] == 0) {next }  #节省运算时间,跳过没有买入计划的产品
+      t_position = copy(position) #在单日开多单的情况下必须重复读取实际的position，因为
+      t_position[is.na(t_position)] = 0
+      #t_position会在k-loop里面累加，影响到其他产品的测试结果
+      for(k in 1:unit_long[j]) {
       
-      t_position[j] = t_position[j] + 1
+        t_position[j] = t_position[j] + 1
       
-      #test 1: any direction ,single holding should be less than 4
-      if (any(abs(t_position) > 4)) {
+        #test 1: any direction ,single holding should be less than 4
+        if (any(abs(na.exclude(t_position)) > 4)) {
         #test 2: any direction, combination of strong corr assets should be less than 6
-      }else if (any(abs(t_position %*% corr_mat$clscorr) > 6)){
+        }else if (any(abs(as.vector(t_position) %*% corr_mat$clscorr) > 6)){
         #test 3: any direction, combination of losely corr assets should be less than 10  
-      }else if (any(abs(t_position %*% corr_mat$lslcorr) > 10)){
+        }else if (any(abs(c(t_position) %*% corr_mat$lslcorr) > 10)){
         #test 4: any direction, total holding should be less than 12  
-      }else if (abs(sum(t_position)) > 12){
-      }else {
+        }else if (abs(sum(t_position)) > 12){
+        }else {
         
         position[j] <- t_position[j]     #update the actual position 
         
@@ -582,9 +590,10 @@ for (ptr in 1:nrow(cdt)){ #start of main loop
   #
   
   for (j in 1:length(product_ids)){
-    
-    if (unit_short[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
+    if (is.na(unit_short[j])){next}
+    else if (unit_short[j] == 0) next  #节省运算时间,跳过没有买入计划的产品
     t_position = copy(position) #在单日开多单的情况下必须重复读取实际的position，因为
+    t_position[is.na(t_position)] = 0
     #t_position会在k-loop里面累加，影响到其他产品的测试结果
     for(k in 1:unit_short[j]) {
       
@@ -1127,3 +1136,5 @@ plot(asset_dt$net_profit, type = "l", main = "account") # 账户资金曲线
 plot(asset_dt$return, type = "h", main = "daily return") # 日度收益率
 plot(asset_dt$pos_dir, type = "h", main = "position") # 每日postion
 par(mfrow = c(1,1))
+
+} #end of if (nrow(data[[i]]) < 56)
