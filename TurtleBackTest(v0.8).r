@@ -10,9 +10,8 @@ library(ggplot2)
 
 #####################Input & Lists ############################################
 
-product_ids          <- c("cu", "al", "zn", "pb", "au", "rb", "ag", "ru", "c",  "m",  "a",  
-                          "y",  "p",  "jd", "l",  "j",  "jm", "i",  "SR", "CF", "TA", "OI", 
-                          "FG", "RM"
+product_ids          <- c("cu","al","zn","au","rb","ru","c","m","a","y","p","l",
+                          "SR","CF"
 )      
 
 
@@ -200,8 +199,8 @@ return_table <- return_table[2:.N,]
 corr_mats <- cor(return_table[,2:ncol(return_table)])
 rownames(corr_mats) = colnames(corr_mats) = product_ids
 
-#corr_mat[[1]] <- (corr_mats > 0.6) * 1
-#corr_mat[[2]] <- (corr_mats > 0.5) * 1
+corr_mat[[1]] <- (corr_mats > 0.6) * 1 #相关系数大于某个值后判定为强相关矩阵
+corr_mat[[2]] <- (corr_mats > 0.23 & corr_mats <= 0.5) * 1 #弱相关矩阵
 
 ###############################################################################
 
